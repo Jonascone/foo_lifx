@@ -5,10 +5,10 @@
 
 #pragma once
 
-#include "../../SDK/foobar2000.h"
+#include "../../ATLHelpers/ATLHelpers.h"
 
 #include "include/lifx.h"
 #include "include/lifx_messages.h"
-
+#include "resource.h"
 #include <array>
 #include <ctime>

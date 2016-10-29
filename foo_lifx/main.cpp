@@ -2,6 +2,7 @@
 //
 
 #include "stdafx.h"
+#include "preferences.h"
 
 // Declaration of your component's version information
 // Since foobar2000 v1.0 having at least one of these in your DLL is mandatory to let the troubleshooter tell different versions of your component apart.
@@ -34,25 +35,21 @@ protected:
 
 		// Colour cycle
 		time_t cycle_delay = 0;
-		float cycle_duration = 30;
 		float cycle = 0.0;
-
-		uint16_t last_brightness = 65535;
 	public:
 		void on_chunk(const audio_chunk &chunk) {
 			float peak = min(1.f, chunk.get_peak() * 1);
-			smoother = smoothing * smoother + ((1 - smoothing) * peak);
+			smoother = (smoothing * smoother + (1 - smoothing)) * peak;
 
 			time_t cur_tick = clock();
-
-			if (smoother > 0.15) {
-				last_brightness = min(65535, 13107 + static_cast<uint16_t>(65535 * peak));
-			}
-
+						
 			if (cycle_delay < cur_tick) {
+				float brightness_percentage = static_cast<float>(cfg_lifx_brightness) / 100.f;
+				uint16_t brightness = min(65535, (13107 * brightness_percentage) + (65535 * smoother * brightness_percentage));
+
 				cycle_delay = cur_tick + 105;
-				cycle = (cycle < 180 ? cycle + (180 / cycle_duration * 0.1) : 0);
-				lifx::message::light::SetColor msg{ 65535 * sin(cycle * std::_Pi / 180), 65535, last_brightness, 3500 };
+				cycle = (cycle < 180 ? cycle + (180 / static_cast<float>(cfg_lifx_cycle_speed) * 0.1) : 0);
+				lifx::message::light::SetColor msg { 65535 * sin(cycle * std::_Pi / 180), 65535, brightness, 3500 };
 				msg.duration = 100;
 				run_command<lifx::message::light::SetColor>(msg);
 			}
@@ -85,9 +82,9 @@ public:
 			if (g_lightbulbs.size()) break;
 		}
 
-		run_command<lifx::message::light::SetColor>(lifx::message::light::SetColor{ 58275, 0, 65535, 5500 });
+		run_command<lifx::message::light::SetColor>(lifx::message::light::SetColor { 58275, 0, 65535, 5500 });
 
-		lifx::message::device::SetPower msg{ 65535 };
+		lifx::message::device::SetPower msg { 65535 };
 		run_command<lifx::message::device::SetPower>(msg);
 		// unknown or v1 products sometimes have issues setting power, so
 		// we have to send it twice
