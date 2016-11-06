@@ -31,25 +31,43 @@ protected:
 	protected:
 		// Peak smoothing
 		float smoothing = 0.6;
-		float smoother = 0;
+		float smoother = 0.0;
 
 		// Colour cycle
-		time_t cycle_delay = 0;
+		clock_t cycle_delay = 0;
 		float cycle = 0.0;
 	public:
 		void on_chunk(const audio_chunk &chunk) {
-			float peak = min(1.f, chunk.get_peak() * 1);
-			smoother = (smoothing * smoother + (1 - smoothing)) * peak;
+			smoother = (smoothing * smoother + (1 - smoothing)) * chunk.get_peak();
 
-			time_t cur_tick = clock();
+			clock_t cur_tick = clock();
 						
 			if (cycle_delay < cur_tick) {
 				float brightness_percentage = static_cast<float>(cfg_lifx_brightness) / 100.f;
 				uint16_t brightness = min(65535, (13107 * brightness_percentage) + (65535 * smoother * brightness_percentage));
 
 				cycle_delay = cur_tick + 105;
-				cycle = (cycle < 180 ? cycle + (180 / static_cast<float>(cfg_lifx_cycle_speed) * 0.1) : 0);
-				lifx::message::light::SetColor msg { 65535 * sin(cycle * std::_Pi / 180), 65535, brightness, 3500 };
+
+				lifx::message::light::SetColor msg;
+
+				if (cfg_lifx_cycle_enabled) {
+					cycle = (cycle < 180 ? cycle + (180 / static_cast<float>(cfg_lifx_cycle_speed) * 0.1) : 0);
+					msg = { 
+						static_cast<uint16_t>(65535 * sin(cycle * std::_Pi / 180)), 
+						65535, 
+						brightness, 
+						3500 
+					};
+				}
+				else {
+					msg = { 
+						static_cast<uint16_t>(65535 * (static_cast<float>(cfg_lifx_hue) / 360)), 
+						static_cast<uint16_t>(65535 * (static_cast<float>(cfg_lifx_saturation) / 100)), 
+						brightness, 
+						3500 
+					};
+				}
+				
 				msg.duration = 100;
 				run_command<lifx::message::light::SetColor>(msg);
 			}
@@ -57,6 +75,8 @@ protected:
 	} *callback = nullptr;
 public:
 	void on_init() {
+		if (!cfg_lifx_enabled) return;
+
 		g_client.RegisterCallback<lifx::message::device::StateService>(
 			[](const lifx::Header& header, const lifx::message::device::StateService& msg)
 		{
@@ -77,7 +97,10 @@ public:
 
 		g_client.Broadcast<lifx::message::device::GetService>({});
 
-		while (true) {
+		// Stop searching for bulbs after 5 seconds
+		time_t timeout = time(nullptr) + 5;
+
+		while (true && time(nullptr) < timeout) {
 			g_client.RunOnce();
 			if (g_lightbulbs.size()) break;
 		}
@@ -94,11 +117,15 @@ public:
 	}
 
 	void on_quit() {
-		run_command<lifx::message::device::SetPower>({});
-		run_command<lifx::message::light::SetColor>(lifx::message::light::SetColor{ 58275, 0, 65535, 5500 });
+		if (cfg_lifx_enabled) {
+			run_command<lifx::message::device::SetPower>({});
+			run_command<lifx::message::light::SetColor>(lifx::message::light::SetColor { 58275, 0, 65535, 5500 });
+		}
 
-		static_api_ptr_t<playback_stream_capture>()->remove_callback(callback);
-		delete callback;
+		if (callback) {
+			static_api_ptr_t<playback_stream_capture>()->remove_callback(callback);
+			delete callback;
+		}
 	}
 };
 
