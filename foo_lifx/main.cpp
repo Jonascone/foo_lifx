@@ -30,23 +30,24 @@ protected:
 	class audio_callback : public playback_stream_capture_callback {
 	protected:
 		// Peak smoothing
-		float smoothing = 0.6;
+		float smoothing = 0.99;
 		float smoother = 0.0;
 
 		// Colour cycle
 		clock_t cycle_delay = 0;
 		float cycle = 0.0;
+		bool debug = false;
 	public:
 		void on_chunk(const audio_chunk &chunk) {
-			smoother = (smoothing * smoother + (1 - smoothing)) * chunk.get_peak();
+			smoother = (chunk.get_peak() * smoothing) + (smoother * (1.0f - smoothing));
 
 			clock_t cur_tick = clock();
 						
 			if (cycle_delay < cur_tick) {
 				float brightness_percentage = static_cast<float>(cfg_lifx_brightness) / 100.f;
-				uint16_t brightness = min(65535, (13107 * brightness_percentage) + (65535 * smoother * brightness_percentage));
+				uint16_t brightness = min(65535, (29127 * (1 + smoother)) * brightness_percentage);
 
-				cycle_delay = cur_tick + 105;
+				cycle_delay = cur_tick + 66;
 
 				lifx::message::light::SetColor msg;
 
@@ -68,8 +69,14 @@ protected:
 					};
 				}
 				
-				msg.duration = 100;
+				msg.duration = 66;
 				run_command<lifx::message::light::SetColor>(msg);
+
+				if (debug) {
+					char buff[128] = { '\0' };
+					sprintf(buff, "B: %f, S: %f", static_cast<float>(brightness) / 65535.f, smoother);
+					console::print(buff);
+				}
 			}
 		}
 	} *callback = nullptr;
