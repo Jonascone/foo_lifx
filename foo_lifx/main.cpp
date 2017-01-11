@@ -47,7 +47,7 @@ protected:
 				float brightness_percentage = static_cast<float>(cfg_lifx_brightness) / 100.f;
 				uint16_t brightness = min(65535, (29127 * (1 + smoother)) * brightness_percentage);
 
-				cycle_delay = cur_tick + 66;
+				cycle_delay = cur_tick + 100;
 
 				lifx::message::light::SetColor msg;
 
@@ -69,7 +69,7 @@ protected:
 					};
 				}
 				
-				msg.duration = 66;
+				msg.duration = 90;
 				run_command<lifx::message::light::SetColor>(msg);
 
 				if (debug) {
