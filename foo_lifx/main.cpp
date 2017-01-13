@@ -17,6 +17,8 @@ VALIDATE_COMPONENT_FILENAME("foo_lifx.dll");
 std::vector<std::array<uint8_t, 8>> g_lightbulbs;
 lifx::LifxClient g_client;
 
+service_ptr_t<visualisation_stream> g_stream;
+
 class lifx_initquit : public initquit {
 protected:
 	template <typename T>
@@ -30,29 +32,86 @@ protected:
 	class audio_callback : public playback_stream_capture_callback {
 	protected:
 		// Peak smoothing
-		float smoothing = 0.99;
-		float smoother = 0.0;
+		float smoothing = 0.99f;
+		float smoother = 0.f;
 
 		// Colour cycle
 		clock_t cycle_delay = 0;
-		float cycle = 0.0;
+		float cycle = 0.f;
 		bool debug = false;
 	public:
+		float get_spectrum(unsigned int fft_size = 1024) {
+			double time;
+			g_stream->get_absolute_time(time);
+
+			audio_chunk_impl_t<> chunk;
+			g_stream->get_spectrum_absolute(chunk, time, fft_size);
+			
+			size_t chunk_size = chunk.get_data_size();
+			if (!chunk_size) return 0.f;
+			
+			float step = (static_cast<float>(chunk.get_sample_rate()) / static_cast<float>(fft_size));
+
+			// Work out the highest index for low and mid frequency ranges
+			size_t lo_idx = static_cast<size_t>(250.f / step);
+			size_t mi_idx = static_cast<size_t>(2000.f / step);
+
+			// Sort the spectrum data into low, mid and high frequency ranges
+			float lo_fq = 0.f;
+			float mi_fq = 0.f;
+			float hi_fq = 0.f;
+
+			size_t lo_ct = 0;
+			size_t mi_ct = 0;
+			size_t hi_ct = 0;
+
+			const audio_sample *chunk_data = chunk.get_data();
+			for (size_t i = chunk_size; i--;) {
+				const audio_sample data = chunk_data[i];
+				if (data < 0.1f) continue; // Filter out any noise
+
+				if (i > mi_idx) {
+					++hi_ct;
+					hi_fq += data;
+				}
+				else if (i > lo_idx) {
+					++mi_ct;
+					mi_fq += data;
+				}
+				else {
+					++lo_ct;
+					lo_fq += data;
+				}
+			}
+
+			// Work out the average of each frequency range
+			if (lo_fq && lo_ct)
+				lo_fq /= lo_ct;
+
+			if (mi_fq && mi_ct)
+				mi_fq /= mi_ct;
+
+			if (hi_fq && hi_ct)
+				hi_fq /= hi_ct;
+
+			return lo_fq + mi_fq + hi_fq;
+		}
+
 		void on_chunk(const audio_chunk &chunk) {
-			smoother = (chunk.get_peak() * smoothing) + (smoother * (1.0f - smoothing));
+			smoother = (get_spectrum() * smoothing) + (smoother * (1.0f - smoothing));
 
 			clock_t cur_tick = clock();
 						
 			if (cycle_delay < cur_tick) {
 				float brightness_percentage = static_cast<float>(cfg_lifx_brightness) / 100.f;
-				uint16_t brightness = min(65535, (29127 * (1 + smoother)) * brightness_percentage);
+				uint16_t brightness = min(65535, static_cast<uint16_t>((29127 * (1 + smoother)) * brightness_percentage));
 
 				cycle_delay = cur_tick + 100;
 
 				lifx::message::light::SetColor msg;
 
 				if (cfg_lifx_cycle_enabled) {
-					cycle = (cycle < 180 ? cycle + (180 / static_cast<float>(cfg_lifx_cycle_speed) * 0.1) : 0);
+					cycle = (cycle < 180 ? cycle + (180 / static_cast<float>(cfg_lifx_cycle_speed) * 0.1f) : 0);
 					msg = { 
 						static_cast<uint16_t>(65535 * sin(cycle * std::_Pi / 180)), 
 						65535, 
@@ -120,6 +179,7 @@ public:
 		// we have to send it twice
 		run_command<lifx::message::device::SetPower>(msg);
 
+		static_api_ptr_t<visualisation_manager>()->create_stream(g_stream, visualisation_manager::KStreamFlagNewFFT);
 		static_api_ptr_t<playback_stream_capture>()->add_callback(callback = new audio_callback());
 	}
 

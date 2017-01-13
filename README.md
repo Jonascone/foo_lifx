@@ -4,4 +4,4 @@ Props to the guy who made https://github.com/codemaster/lib-lifx for communicati
 
 ## Binary
 You can get the binary here.
-https://mega.nz/#!CpwxjYpL!ezWDjv2xjYcnOo03hwjQ9RgFa-7w4bTX0cUs4aPhDO8
+https://mega.nz/#!6h4WyAgB!SooZWkSg2_gellHGu7QMU1he16iO5ajNA7OVH-ouAqU
