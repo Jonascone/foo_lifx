@@ -104,7 +104,20 @@ protected:
 						
 			if (cycle_delay < cur_tick) {
 				float brightness_percentage = static_cast<float>(cfg_lifx_brightness) / 100.f;
-				uint16_t brightness = min(65535, static_cast<uint16_t>((29127 * (1 + smoother)) * brightness_percentage));
+				float intensity = 0.f;
+				switch (cfg_lifx_intensity) {
+					case 1:
+						intensity = (32768 * (0.125f + smoother * 1.875f));
+						break;
+					case 2:
+						intensity = (32768 * (0.25f + smoother * 1.75f));
+						break;
+					default:
+						intensity = (32768 * (0.5f + smoother * 1.5f));
+
+				}
+				
+				uint16_t brightness = min(65535, static_cast<uint16_t>(intensity * brightness_percentage));
 
 				cycle_delay = cur_tick + 100;
 
