@@ -3,4 +3,4 @@ A foobar2000 component that visualises currently played music with Lifx bulbs co
 Props to the guy who made https://github.com/codemaster/lib-lifx for communicating with the bulbs!
 
 ## Binary
-You can get the binary [here](https://mega.nz/#!6xhjnSgZ!rLMgpUHsVs8dF00iw-tRdXmc0dBvn6fEHKWIPDHyr04)
+You can get the binary [here](https://mega.nz/#!WlpSgLwB!_YW7ViLeKbVm2l6FWihgwrRnpG-svuiKUUqC1Q3tK20)

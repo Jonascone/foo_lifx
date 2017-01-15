@@ -22,7 +22,8 @@ service_ptr_t<visualisation_stream> visualiser;
 const lifx::message::light::SetColor default_colour { 58275, 0, 65535, 5500, 250 };
 
 bool playing = false;
-float smoother = 0.f;
+float amplitude = 0.f;
+unsigned int delay = 100;
 
 template <typename T>
 void lifx_send(const T& message) {
@@ -38,7 +39,7 @@ protected:
 	public:
 		void on_playback_new_track(metadb_handle_ptr) {
 			playing = true;
-			smoother = 0.f;
+			amplitude = 0.f;
 		}
 		
 		void on_playback_pause(bool state) {
@@ -55,7 +56,7 @@ protected:
 	class lifx_callback : public playback_stream_capture_callback {
 	protected:
 		// Peak smoothing
-		float smoothing = 0.99f;
+		float smoothing = 0.9f;
 
 		// Next time we can send a colour change
 		clock_t next_tick = 0;
@@ -63,15 +64,28 @@ protected:
 		// Colour cycle
 		float cycle = 0.f;
 
-		float get_spectrum(unsigned int fft_size = 1024) {
-			double time;
-			visualiser->get_absolute_time(time);
+		struct spectrum {
+			float lo_fq, mi_fq, hi_fq;
+			
+			float average() {
+				return (lo_fq + mi_fq + hi_fq) / 3;
+			}
+
+			float total() {
+				return lo_fq + mi_fq + hi_fq;
+			}
+		};
+
+		spectrum get_spectrum(unsigned int fft_size = 256, double time = 0.0) {
+			if (!time) {
+				visualiser->get_absolute_time(time);
+			}
 
 			audio_chunk_impl_t<> chunk;
-			visualiser->get_spectrum_absolute(chunk, time, fft_size);
+			if (!visualiser->get_spectrum_absolute(chunk, time, fft_size)) return spectrum { 0.f, 0.f, 0.f };
 
 			size_t chunk_size = chunk.get_data_size();
-			if (!chunk_size) return 0.f;
+			if (!chunk_size) return spectrum { 0.f, 0.f, 0.f };
 
 			float step = (static_cast<float>(chunk.get_sample_rate()) / static_cast<float>(fft_size));
 
@@ -117,7 +131,27 @@ protected:
 			if (hi_fq && hi_ct)
 				hi_fq /= hi_ct;
 
-			return lo_fq + mi_fq + hi_fq;
+			return spectrum { lo_fq, mi_fq, hi_fq };
+		}
+				
+		// Gets spectrum data from an offset in miliseconds
+		float offset_spectrum(unsigned int miliseconds, unsigned int fft_size = 256) {
+			double cur_time;
+			visualiser->get_absolute_time(cur_time);
+
+			double tgt_time = cur_time + miliseconds / 1000.0;
+
+			// Smooth and scale the frequency data so it looks somewhat decent
+			float smoother = 0.f;
+			for (; cur_time <= tgt_time; cur_time += 0.001) {
+				spectrum spectrum_data = get_spectrum(fft_size, cur_time);
+				spectrum_data.lo_fq *= 2.f;
+				spectrum_data.mi_fq *= 1.5f;
+				spectrum_data.hi_fq *= 1.125f;
+				smoother = (spectrum_data.average() * smoothing) + (smoother * (1.f - smoothing));
+			}
+
+			return smoother;
 		}
 
 	public:
@@ -128,23 +162,20 @@ protected:
 				return;
 			}
 
-			smoother = (get_spectrum() * smoothing) + (smoother * (1.f - smoothing));
-
 			clock_t cur_tick = clock();
 			if (next_tick < cur_tick) {
-				next_tick = cur_tick + 100;
+				next_tick = cur_tick + delay;
 
 				float intensity = 0.f;
 				switch (cfg_lifx_intensity) {
 				case 1:
-					intensity = (32768 * (0.125f + smoother * 1.875f));
+					intensity = min(65535, 32768 * (0.25f + amplitude * 1.75f));
 					break;
 				case 2:
-					intensity = (32768 * (0.25f + smoother * 1.75f));
+					intensity = min(65535, 32768 * (0.125f + amplitude * 1.875f));
 					break;
 				default:
-					intensity = (32768 * (0.5f + smoother * 1.5f));
-
+					intensity = min(65535, 32768 * (0.5f + amplitude * 1.5f));
 				}
 
 				float brightness_percentage = static_cast<float>(cfg_lifx_brightness) / 100.f;
@@ -152,13 +183,13 @@ protected:
 				
 				lifx::message::light::SetColor msg;
 				if (cfg_lifx_cycle_enabled) {
-					cycle = (cycle < 180 ? cycle + (180 / static_cast<float>(cfg_lifx_cycle_speed) * 0.1f) : 0);
+					cycle = (cycle < 180 ? cycle + (180 / static_cast<float>(cfg_lifx_cycle_speed) * (delay / 1000.f)) : 0);
 					msg = {
 						static_cast<uint16_t>(65535 * sin(cycle * std::_Pi / 180)),
 						65535,
 						brightness,
 						3500,
-						90 // Duration
+						delay - 10 // Duration
 					};
 				}
 				else {
@@ -167,15 +198,17 @@ protected:
 						static_cast<uint16_t>(65535 * (static_cast<float>(cfg_lifx_saturation) / 100)),
 						brightness,
 						3500,
-						90 // Duration
+						delay - 10 // Duration
 					};
 				}
 
 				lifx_send<lifx::message::light::SetColor>(msg);
 
+				amplitude = offset_spectrum(delay + 5);
+
 				if (debug) {
 					char buff[128] = { '\0' };
-					sprintf(buff, "B: %f, S: %f", static_cast<float>(brightness) / 65535.f, smoother);
+					sprintf(buff, "B: %d B: %f, A: %f", brightness, static_cast<float>(brightness) / 65535.f, amplitude);
 					console::print(buff);
 				}
 			}
@@ -213,7 +246,6 @@ public:
 		}
 
 		lifx_send<lifx::message::light::SetColor>(default_colour);
-		console::printf("%d", default_colour.duration);
 		lifx::message::device::SetPower msg { 65535 };
 		lifx_send<lifx::message::device::SetPower>(msg);
 		// unknown or v1 products sometimes have issues setting power, so
