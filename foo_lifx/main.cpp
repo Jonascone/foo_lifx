@@ -14,7 +14,7 @@ DECLARE_COMPONENT_VERSION("Lifx for Foobar 2000", "0.1", "");
 // This will prevent users from renaming your component around (important for proper troubleshooter behaviors) or loading multiple instances of it.
 VALIDATE_COMPONENT_FILENAME("foo_lifx.dll");
 
-bool debug = true;
+bool debug = false;
 
 lifx::LifxClient lifx_client;
 std::vector<std::array<uint8_t, 8>> lifx_lightbulbs;
@@ -24,18 +24,19 @@ const lifx::message::light::SetColor default_colour { 58275, 0, 65535, 5500, 250
 bool playing = true;
 
 float amplitude = 0.f;
-float smoothing_multiplier = 30.f;
 float offset = 0.125f;
+float smoothing_multiplier = 2.5f;
 float smoother = 0.f;
 double next_tick = 0;
 
-float max = 0.f;
-float min = 0.f;
-float min_found = false;
+const int fft_size = 1024;
 
 // Shamefully nicked this and a lot of other code from here:
 // http://stackoverflow.com/questions/20408388/how-to-filter-fft-data-for-audio-visualisation#answer-20584591
-const float aWeightFrequency[] = {
+
+const size_t aweight_length = 34;
+
+const float aweight_frequency[] = {
 	10, 12.5, 16, 20,
 	25, 31.5, 40, 50,
 	63, 80, 100, 125,
@@ -47,7 +48,7 @@ const float aWeightFrequency[] = {
 	16000, 20000
 };
 
-const float aWeightDecibels[] = {
+const float aweight_decibels[] = {
 	-70.4, -63.4, -56.7, -50.5,
 	-44.7, -39.4, -34.6, -30.2,
 	-26.2, -22.5, -19.1, -16.1,
@@ -59,10 +60,11 @@ const float aWeightDecibels[] = {
 	-6.6, -9.3
 };
 
-float getFrequencyWeight(float xx) {
-	const size_t length = 34;
-	const float *x = aWeightFrequency;
-	const float *y = aWeightDecibels;
+float *aweight_values = nullptr;
+
+float get_frequency_weight(float xx) {
+	const float *x = aweight_frequency;
+	const float *y = aweight_decibels;
 
 	float result = 0.0;
 	boolean found = false;
@@ -73,7 +75,7 @@ float getFrequencyWeight(float xx) {
 	}
 
 	if (!found) {
-		for (int i = 1; i < length; i++) {
+		for (int i = 1; i < aweight_length; i++) {
 			if (x[i] > xx) {
 				result = y[i - 1] + ((xx - x[i - 1]) / (x[i] - x[i - 1])) * (y[i] - y[i - 1]);
 				found = true;
@@ -83,7 +85,7 @@ float getFrequencyWeight(float xx) {
 	}
 
 	if (!found) {
-		result = y[length - 1];
+		result = y[aweight_length - 1];
 	}
 
 	return result;
@@ -103,9 +105,8 @@ protected:
 	public:
 		void on_playback_new_track(metadb_handle_ptr) {
 			playing = true;
-			smoother = amplitude = max = min = 0.f;
+			smoother = amplitude = 0.f;
 			next_tick = 0;
-			min_found = false;
 		}
 		
 		void on_playback_pause(bool state) {
@@ -128,24 +129,12 @@ protected:
 		// Colour cycle
 		float cycle = 0.f;
 
-		struct spectrum {
-			float lo_fq, mi_fq, hi_fq;
-			
-			float average() {
-				return (lo_fq + mi_fq + hi_fq) / 3;
-			}
-
-			float total() {
-				return lo_fq + mi_fq + hi_fq;
-			}
-		};
-
 		float dB(float x) {
 			if (!x) return 0.f;
 			return 10 * log10f(x);
 		}
 
-		float get_spectrum(unsigned int fft_size, double time = 0.0) {
+		float get_spectrum(double time = 0.0) {
 			if (!time) {
 				visualiser->get_absolute_time(time);
 			}
@@ -159,49 +148,51 @@ protected:
 			const audio_sample *chunk_data = chunk.get_data();
 
 			float step = chunk.get_sample_rate() / fft_size;
-			audio_sample *weighted_data = new audio_sample[chunk_size]();
+			float max = 0.f;
+			float min = 0.f;
+			bool min_found = false;
 
-			size_t average_ct = 0;
 			for (size_t i = chunk_size; i--;) {
 				float frequency = i * step;
 				if (frequency > 18000.f || chunk_data[i] < 0.05f) continue;
-				++average_ct;
-				float value = weighted_data[i] = dB(chunk_data[i]) + getFrequencyWeight(frequency);
+				float value = dB(chunk_data[i]) + get_frequency_weight(frequency / 2);
+				aweight_values[i] = value;
 
-				if (value > max) {
-					max = value;
+				if (aweight_values[i] > max) {
+					max = aweight_values[i];
 				}
 
-				if (!min_found|| value < min) {
-					min = value;
+				if (!min_found || aweight_values[i] < min) {
+					min = aweight_values[i];
 				}
 			}
 
 			float range = max - min;
 			float scale = range + 0.00001;
 			float average = 0.f;
+			size_t average_ct = 0;
 			for (size_t i = chunk_size; i--;) {
 				float frequency = i * step;
+				float value = ((aweight_values[i] - min) / scale);
 				if (frequency > 18000.f || chunk_data[i] < 0.05f) continue;
-				average += ((weighted_data[i] - min) / scale) / average_ct;
+				average += value;
+				++average_ct;
 			}
 
-			delete[] weighted_data;
-
-			return average;
+			if (!average_ct) return 0.f;
+			return max(0.f, average / average_ct);
 		}
 				
-		float offset_spectrum(unsigned int fft_size = 1024) {
+		float offset_spectrum() {
 			double cur_time;
 			visualiser->get_absolute_time(cur_time);
 
 			double tgt_time = cur_time + offset;
 
-			double sample_step = 0.001;
+			double sample_step = 0.01;
 			float smoothing = 1.f / (offset / sample_step) * smoothing_multiplier;
-			float smoother = 0.f;
 			for (; cur_time <= tgt_time; cur_time += sample_step) {
-				float value = get_spectrum(fft_size, cur_time);
+				float value = get_spectrum(cur_time);
 				smoother = (smoother * smoothing) + (value * (1.f - smoothing));
 			}
 
@@ -230,6 +221,9 @@ protected:
 					break;
 				case 2:
 					intensity = min(65535, 32768 * (0.125f + amplitude * 1.875f));
+					break;
+				case 3:
+					intensity = min(65535, 32768 * amplitude * 2.f);
 					break;
 				default:
 					intensity = min(65535, 32768 * (0.5f + amplitude * 1.5f));
@@ -275,6 +269,8 @@ public:
 	void on_init() {
 		if (!cfg_lifx_enabled) return;
 		
+		aweight_values = new float[fft_size]();
+
 		lifx_client.RegisterCallback<lifx::message::device::StateService>(
 			[](const lifx::Header& header, const lifx::message::device::StateService& msg)
 		{
@@ -321,6 +317,7 @@ public:
 			lifx_send<lifx::message::light::SetColor>(default_colour);
 		}
 
+		if (aweight_values) delete[] aweight_values;
 		if (play_callback) delete play_callback;
 		if (callback) delete callback;
 	}

@@ -47,6 +47,7 @@ private:
 		m_lifx_intensity.InsertString(0, L"Normal");
 		m_lifx_intensity.InsertString(1, L"High");
 		m_lifx_intensity.InsertString(2, L"Very High");
+		m_lifx_intensity.InsertString(3, L"Maximum");
 		m_lifx_intensity.SetCurSel(cfg_lifx_intensity);
 
 		m_lifx_cycle_speed = GetDlgItem(IDC_LIFX_CYCLE_SPEED);
