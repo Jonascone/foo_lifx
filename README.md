@@ -6,8 +6,10 @@ Props to the guy who made https://github.com/codemaster/lib-lifx for communicati
 * Enable/Disable
 * Brightness (%)
 * Offset (ms)
-    * The length of audio visualised before communicating with the bulb 
-    * Increase this to reduce latency
+    * The length of audio visualised before communicating with the bulb
+    * Change this to affect smoothness
+* Delay (ms)
+    * Increase this to latency
 * Intensity
     * Normal/High/Very High/Maximum
     * Higher levels increase the overall brightness determined by the visualisation   
@@ -17,6 +19,6 @@ Props to the guy who made https://github.com/codemaster/lib-lifx for communicati
     * Custom values to use instead of the colour cycle
 
 ## Binary
-You can get the binary [here](https://mega.nz/#!KtIxALqB!MaZNPVw8-_Ri5Ti24oQpG2Uzk3j9mp0LWXTonKqkOg0).
+You can get the binary [here](https://mega.nz/#!38wHWJIJ!yAy0SxSTCcPRdePAQm5oi7KKAItlcwC5kwvb_K-6u04).
 
 Simply drop the binary into the foobar2000's components folder.
