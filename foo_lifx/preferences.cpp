@@ -11,6 +11,7 @@ cfg_uint cfg_lifx_hue(guid_cfg_lifx_hue, 0);
 cfg_uint cfg_lifx_saturation(guid_cfg_lifx_saturation, 0);
 cfg_uint cfg_lifx_intensity(guid_cfg_lifx_intensity, 0);
 cfg_uint cfg_lifx_offset(guid_cfg_lifx_offset, 125);
+cfg_uint cfg_lifx_delay(guid_cfg_lifx_delay, 66);
 
 class CLifxPreferences : public CDialogImpl<CLifxPreferences>, public preferences_page_instance {
 private:
@@ -57,6 +58,7 @@ private:
 		SetDlgItemInt(IDC_LIFX_CYCLE_SPEED, cfg_lifx_cycle_speed, FALSE);
 		SetDlgItemInt(IDC_LIFX_BRIGHTNESS, cfg_lifx_brightness, FALSE);
 		SetDlgItemInt(IDC_LIFX_OFFSET, cfg_lifx_offset, FALSE);
+		SetDlgItemInt(IDC_LIFX_DELAY, cfg_lifx_delay, FALSE);
 		SetDlgItemInt(IDC_LIFX_HUE, cfg_lifx_hue, FALSE);
 		SetDlgItemInt(IDC_LIFX_SATURATION, cfg_lifx_saturation, FALSE);
 
@@ -77,6 +79,7 @@ private:
 			GetDlgItemInt(IDC_LIFX_CYCLE_SPEED, NULL, FALSE) != cfg_lifx_cycle_speed || 
 			GetDlgItemInt(IDC_LIFX_BRIGHTNESS) != cfg_lifx_brightness ||
 			GetDlgItemInt(IDC_LIFX_OFFSET) != cfg_lifx_offset ||
+			GetDlgItemInt(IDC_LIFX_DELAY) != cfg_lifx_delay ||
 			GetDlgItemInt(IDC_LIFX_HUE) != cfg_lifx_hue ||
 			GetDlgItemInt(IDC_LIFX_SATURATION) != cfg_lifx_saturation;
 	}
@@ -107,6 +110,7 @@ public:
 
 		cfg_lifx_brightness = min(100, GetDlgItemInt(IDC_LIFX_BRIGHTNESS, NULL, FALSE));
 		cfg_lifx_offset = max(50, GetDlgItemInt(IDC_LIFX_OFFSET, NULL, FALSE));
+		cfg_lifx_delay = min(1000, GetDlgItemInt(IDC_LIFX_DELAY, NULL, FALSE));
 		cfg_lifx_hue = min(360, max(0, GetDlgItemInt(IDC_LIFX_HUE, NULL, FALSE)));
 		cfg_lifx_saturation = min(100, max(0, GetDlgItemInt(IDC_LIFX_SATURATION, NULL, FALSE)));
 
@@ -136,6 +140,7 @@ public:
 		COMMAND_HANDLER_EX(IDC_LIFX_CYCLE_SPEED, EN_CHANGE, OnEditChange)
 		COMMAND_HANDLER_EX(IDC_LIFX_BRIGHTNESS, EN_CHANGE, OnEditChange)
 		COMMAND_HANDLER_EX(IDC_LIFX_OFFSET, EN_CHANGE, OnEditChange)
+		COMMAND_HANDLER_EX(IDC_LIFX_DELAY, EN_CHANGE, OnEditChange)
 		COMMAND_HANDLER_EX(IDC_LIFX_HUE, EN_CHANGE, OnEditChange)
 		COMMAND_HANDLER_EX(IDC_LIFX_SATURATION, EN_CHANGE, OnEditChange)
 		COMMAND_HANDLER_EX(IDC_LIFX_INTENSITY, CBN_SELCHANGE, OnEditChange)

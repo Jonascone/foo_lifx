@@ -25,7 +25,7 @@ bool playing = true;
 
 float amplitude = 0.f;
 float offset = 0.125f;
-float smoothing_multiplier = 2.5f;
+float delay = 0.066f;
 float smoother = 0.f;
 double next_tick = 0;
 
@@ -189,11 +189,10 @@ protected:
 
 			double tgt_time = cur_time + offset;
 
-			double sample_step = 0.01;
-			float smoothing = 1.f / (offset / sample_step) * smoothing_multiplier;
+			double sample_step = 0.025;
 			for (; cur_time <= tgt_time; cur_time += sample_step) {
 				float value = get_spectrum(cur_time);
-				smoother = (smoother * smoothing) + (value * (1.f - smoothing));
+				smoother = (smoother * sample_step) + (value * (1.f - sample_step));
 			}
 
 			return smoother;
@@ -212,21 +211,22 @@ protected:
 
 			if (next_tick < cur_tick) {
 				offset = cfg_lifx_offset / 1000.f;
-				next_tick = cur_tick + offset;
+				delay = cfg_lifx_delay / 1000.f;
+				next_tick = cur_tick + offset - delay;
 
 				float intensity = 0.f;
 				switch (cfg_lifx_intensity) {
 				case 1:
-					intensity = min(65535, 32768 * (0.25f + amplitude * 1.75f));
+					intensity = 65535 * (0.25f + amplitude * 0.75f);
 					break;
 				case 2:
-					intensity = min(65535, 32768 * (0.125f + amplitude * 1.875f));
+					intensity = 65535 * (0.125f + amplitude * 0.875f);
 					break;
 				case 3:
-					intensity = min(65535, 32768 * amplitude * 2.f);
+					intensity = 65535 * amplitude;
 					break;
 				default:
-					intensity = min(65535, 32768 * (0.5f + amplitude * 1.5f));
+					intensity = 65535 * (0.5f + amplitude * 0.5f); 
 				}
 
 				float brightness_percentage = static_cast<float>(cfg_lifx_brightness) / 100.f;
