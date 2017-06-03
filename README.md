@@ -9,7 +9,7 @@ Props to the guy who made https://github.com/codemaster/lib-lifx for communicati
     * The length of audio visualised before communicating with the bulb
     * Change this to affect smoothness
 * Delay (ms)
-    * Increase this to latency
+    * Change this to improve synchronisation between the audio playing and the visualised audio
 * Intensity
     * Normal/High/Very High/Maximum
     * Higher levels increase the overall brightness determined by the visualisation   
