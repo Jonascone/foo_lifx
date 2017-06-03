@@ -211,7 +211,6 @@ protected:
 
 			if (next_tick < cur_tick) {
 				offset = cfg_lifx_offset / 1000.f;
-				delay = cfg_lifx_delay / 1000.f;
 				next_tick = cur_tick + offset - delay;
 
 				float intensity = 0.f;
@@ -254,7 +253,12 @@ protected:
 				}
 
 				lifx_send<lifx::message::light::SetColor>(msg);
-				
+
+				// Work out the response time to delay the next message by
+				lifx_client.RegisterCallback<lifx::message::light::SetColor>([time_sent = clock()](const lifx::Header, const lifx::message::light::SetColor&) {
+					delay = delay * 0.9f + (clock() - time_sent) / 1000.f * 0.1f;
+				});
+
 				amplitude = offset_spectrum();
 
 				if (debug) {
