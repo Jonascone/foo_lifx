@@ -60,8 +60,6 @@ const float aweight_decibels[] = {
 	-6.6, -9.3
 };
 
-float *aweight_values = nullptr;
-
 float get_frequency_weight(float xx) {
 	const float *x = aweight_frequency;
 	const float *y = aweight_decibels;
@@ -152,6 +150,8 @@ protected:
 			float min = 0.f;
 			bool min_found = false;
 
+			float aweight_values[fft_size] = { 0 };
+
 			for (size_t i = chunk_size; i--;) {
 				float frequency = i * step;
 				if (frequency > 18000.f || chunk_data[i] < 0.05f) continue;
@@ -208,11 +208,11 @@ protected:
 			
 			double cur_tick;
 			visualiser->get_absolute_time(cur_tick);
-
+									
 			if (next_tick < cur_tick) {
 				offset = cfg_lifx_offset / 1000.f;
 				next_tick = cur_tick + offset - delay;
-
+				
 				float intensity = 0.f;
 				switch (cfg_lifx_intensity) {
 				case 1:
@@ -260,7 +260,7 @@ protected:
 				});
 
 				amplitude = offset_spectrum();
-
+				
 				if (debug) {
 					char buff[128] = { '\0' };
 					sprintf(buff, "B: %d B: %f, A: %f, O: %f", brightness, static_cast<float>(brightness) / 65535.f, amplitude, offset);
@@ -273,8 +273,6 @@ public:
 	void on_init() {
 		if (!cfg_lifx_enabled) return;
 		
-		aweight_values = new float[fft_size]();
-
 		lifx_client.RegisterCallback<lifx::message::device::StateService>(
 			[](const lifx::Header& header, const lifx::message::device::StateService& msg)
 		{
@@ -321,7 +319,6 @@ public:
 			lifx_send<lifx::message::light::SetColor>(default_colour);
 		}
 
-		if (aweight_values) delete[] aweight_values;
 		if (play_callback) delete play_callback;
 		if (callback) delete callback;
 	}
