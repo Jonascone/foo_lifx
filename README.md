@@ -17,6 +17,6 @@ Props to the guy who made https://github.com/codemaster/lib-lifx for communicati
     * Custom values to use instead of the colour cycle
 
 ## Binary
-You can get the binary [here](https://mega.nz/#!HoRUxZ4Y!nM58hCiamaLp7Wd-OFigDqpesk5vGDhz__IHyacZHqo).
+You can get the binary [here](https://mega.nz/#!y4plgRKS!DA3YoSQNDPCNuWGzek4onrNhyQAhAOfL7TIyLCfprBg).
 
 Simply drop the binary into the foobar2000's components folder.

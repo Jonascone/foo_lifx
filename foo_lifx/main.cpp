@@ -23,9 +23,7 @@ const lifx::message::light::SetColor default_colour { 58275, 0, 65535, 5500, 250
 
 bool playing = true;
 
-float amplitude = 0.f;
-float offset = 0.125f;
-float delay = 0.066f;
+float offset = 0.2f;
 float smoother = 0.f;
 double next_tick = 0;
 
@@ -103,7 +101,7 @@ protected:
 	public:
 		void on_playback_new_track(metadb_handle_ptr) {
 			playing = true;
-			smoother = amplitude = 0.f;
+			smoother = 0.f;
 			next_tick = 0;
 		}
 		
@@ -151,20 +149,21 @@ protected:
 			bool min_found = false;
 
 			float aweight_values[fft_size] = { 0 };
-
+			
 			for (size_t i = chunk_size; i--;) {
 				float frequency = i * step;
 				if (frequency > 18000.f || chunk_data[i] < 0.05f) continue;
+
 				float value = dB(chunk_data[i]) + get_frequency_weight(frequency / 2);
+				if (value > max) {
+					max = value;
+				}
+
+				if (!min_found || value < min) {
+					min = value;
+				}
+
 				aweight_values[i] = value;
-
-				if (aweight_values[i] > max) {
-					max = aweight_values[i];
-				}
-
-				if (!min_found || aweight_values[i] < min) {
-					min = aweight_values[i];
-				}
 			}
 
 			float range = max - min;
@@ -172,10 +171,8 @@ protected:
 			float average = 0.f;
 			size_t average_ct = 0;
 			for (size_t i = chunk_size; i--;) {
-				float frequency = i * step;
-				float value = ((aweight_values[i] - min) / scale);
-				if (frequency > 18000.f || chunk_data[i] < 0.05f) continue;
-				average += value;
+				if (i * step > 18000.f || chunk_data[i] < 0.05f) continue;
+				average += ((aweight_values[i] - min) / scale);
 				++average_ct;
 			}
 
@@ -183,16 +180,18 @@ protected:
 			return max(0.f, average / average_ct);
 		}
 				
-		float offset_spectrum() {
+		float offset_spectrum(double start_offset = 0.0) {
 			double cur_time;
 			visualiser->get_absolute_time(cur_time);
+			
+			cur_time += start_offset;
 
 			double tgt_time = cur_time + offset;
 
-			double sample_step = 0.025;
+			double sample_step = 0.01 * offset;
 			for (; cur_time <= tgt_time; cur_time += sample_step) {
 				float value = get_spectrum(cur_time);
-				smoother = (smoother * sample_step) + (value * (1.f - sample_step));
+				smoother = (smoother * sample_step) + (value * (1.0 - sample_step));
 			}
 
 			return smoother;
@@ -211,8 +210,10 @@ protected:
 									
 			if (next_tick < cur_tick) {
 				offset = cfg_lifx_offset / 1000.f;
-				next_tick = cur_tick + offset - delay;
+				next_tick = cur_tick + offset;
 				
+				float amplitude = offset_spectrum(offset * 1.1f);
+
 				float intensity = 0.f;
 				switch (cfg_lifx_intensity) {
 				case 1:
@@ -253,14 +254,7 @@ protected:
 				}
 
 				lifx_send<lifx::message::light::SetColor>(msg);
-
-				// Work out the response time to delay the next message by
-				lifx_client.RegisterCallback<lifx::message::light::SetColor>([time_sent = clock()](const lifx::Header, const lifx::message::light::SetColor&) {
-					delay = delay * 0.9f + (clock() - time_sent) / 1000.f * 0.1f;
-				});
-
-				amplitude = offset_spectrum();
-				
+								
 				if (debug) {
 					char buff[128] = { '\0' };
 					sprintf(buff, "B: %d B: %f, A: %f, O: %f", brightness, static_cast<float>(brightness) / 65535.f, amplitude, offset);
